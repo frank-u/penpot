@@ -18,15 +18,23 @@
    Catches any exception thrown by the WASM function, reads the error code from
    WASM when available, and routes it based on the error type:
    - :wasm-non-blocking: call app.main.errors/on-error (eventually, shows a toast and logs the error)
-   - :wasm-critical or unknown: throws an exception to be handled by the global error handler (eventually, shows the internal error page)"
+   - :wasm-critical or unknown: throws an exception to be handled by the global error handler (eventually, shows the internal error page)
+   Restores the stack pointer on failure, since a trap leaves its shadow-stack frames behind."
   [module name & params]
-  (let [fn-sym    (with-meta (gensym "fn-") {:tag 'function})
-        cause-sym (gensym "cause")]
-    `(let [~fn-sym (cljs.core/unchecked-get ~module ~name)]
+  (let [fn-sym     (with-meta (gensym "fn-") {:tag 'function})
+        module-sym (gensym "module")
+        stack-sym  (gensym "stack")
+        cause-sym  (gensym "cause")]
+    `(let [~module-sym ~module
+           ~fn-sym     (cljs.core/unchecked-get ~module-sym ~name)
+           save-fn#    (cljs.core/unchecked-get ~module-sym "stackSave")
+           ~stack-sym  (when save-fn# (save-fn#))]
        (try
          (~fn-sym ~@params)
          (catch :default ~cause-sym
-           (let [read-code-fn# (cljs.core/unchecked-get ~module "_read_error_code")
+           (when (some? ~stack-sym)
+             ((cljs.core/unchecked-get ~module-sym "stackRestore") ~stack-sym))
+           (let [read-code-fn# (cljs.core/unchecked-get ~module-sym "_read_error_code")
                  code-num#     (when read-code-fn# (read-code-fn#))
                  code#         (get error-code code-num# :wasm-critical)
                  hint#         (str "WASM Error (" (d/name code#)   ")")
