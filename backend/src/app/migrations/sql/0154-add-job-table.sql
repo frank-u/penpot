@@ -92,12 +92,10 @@ CREATE INDEX job__resource__idx
     ON job (resource_id)
     WHERE resource_id IS NOT NULL;
 
--- Dispatcher recovery: it finds the `scheduled` jobs of its own tenant.
--- `0159-consumer-generalization` rebuilds it on `modified_at` (the hand-off
--- time), which is the column the lost sweep filters by.
-CREATE INDEX job__scheduled__idx
-    ON job (tenant, scheduled_at)
-    WHERE status = 'scheduled';
+-- The lost-sweep index of `scheduled` jobs is created by
+-- `0159-consumer-generalization`, on `modified_at` (the hand-off time),
+-- which is the column the sweep filters by: building it here on
+-- `scheduled_at` would only throw it away in the same transaction.
 
 -- Jobs GC expiration: it scans jobs past expires_at while excluding
 -- running and retry jobs from the expiration delete.

@@ -215,6 +215,23 @@
           (t/is (= names (mapv :name events)))
           (t/is (= 0 (unread-count consumer/nexus))))))))
 
+(t/deftest consumer-nexus-chunks-by-the-configured-chunk-size
+  ;; `chunk-size` is a var so a test can shrink it: the loop must honour
+  ;; it and still send every event, in order, however many chunks it takes.
+  (let [prof  (th/create-profile* 4 {:is-active true})
+        names (mapv #(str "small-" %) (range 1 8))]
+    (with-redefs [cf/flags #{:nexus}
+                  consumer/chunk-size 3]
+      (with-mocks [http-mock {:target 'app.http.client/req :return {:status 204}}]
+        (doseq [name names]
+          (insert-audit-row (:id prof) name))
+        (run-nexus {:uri archive-uri})
+        (let [bodies (map #(transit/decode (:body (second %))) (:call-args-list @http-mock))
+              events (mapcat :events bodies)]
+          (t/is (= [3 3 1] (mapv #(count (:events %)) bodies)))
+          (t/is (= names (mapv :name events))))
+        (t/is (= 0 (unread-count consumer/nexus)))))))
+
 (t/deftest consumer-nexus-default-uri-appends-api-audit
   (let [prof (th/create-profile* 3 {:is-active true})
         uris (atom [])]
@@ -275,6 +292,27 @@
           (t/is (= ["create-project" "create-file"]
                    (mapv :name (:events params)))))
         ;; Every row was passed over: the skipped ones and the ones sent.
+        (t/is (= 0 (unread-count consumer/admin-console)))))))
+
+(t/deftest consumer-admin-console-forwards-organization-attribute-events
+  ;; The allowlist dropped these two names during the rebase (upstream
+  ;; #12861 and #12932 added them): an event outside it counts as skipped
+  ;; and the GC deletes the row, so the admin console never sees the
+  ;; attribute change.
+  (let [prof (th/create-profile* 13 {:is-active true})]
+    (with-redefs [cf/flags #{:admin-console}]
+      (with-mocks [admin-console-mock {:target 'app.nitrate/call :return nil}]
+        (insert-audit-row (:id prof) "create-organization-attribute")
+        (insert-audit-row (:id prof) "delete-organization-attribute")
+        (insert-audit-row (:id prof) "update-organization-attribute")
+        (insert-audit-row (:id prof) "unrelated-event")
+        (run-admin-console)
+        (t/is (:called? @admin-console-mock))
+        (let [[_ _ params] (:call-args @admin-console-mock)]
+          (t/is (= ["create-organization-attribute"
+                    "delete-organization-attribute"
+                    "update-organization-attribute"]
+                   (mapv :name (:events params)))))
         (t/is (= 0 (unread-count consumer/admin-console)))))))
 
 (t/deftest consumer-admin-console-advances-over-non-matching-rows

@@ -60,6 +60,7 @@
     "delete-file"
     "delete-font"
     "delete-organization"
+    "delete-organization-attribute"
     "delete-organization-member"
     "delete-project"
     "delete-team"
@@ -84,6 +85,7 @@
     "success-activate-organization-sso"
     "success-apply-organization-sso-changes"
     "unassign-organization-attribute"
+    "update-organization-attribute"
     "update-organization-invitation"
     "update-organization-permissions"
     "update-team-invitation"
@@ -217,9 +219,9 @@
 (defn- send-events
   "Ingest rows into the admin console. Returns {:processed :skipped}
   (filtered-out rows count as skipped); throws carrying the attempted
-  count as :events, like send-events. Enrich failures propagate
-  untouched: a local DB/decode failure is ours, not the destination's,
-  and must not count as a send failure."
+  count as :events. Enrich failures propagate untouched: a local
+  DB/decode failure is ours, not the destination's, and must not count as
+  a send failure."
   [cfg rows]
   (let [events   (filterv #(and (contains? event-names (:name %))
                                 (not (audit/telemetry-shadow-source? (:source %))))

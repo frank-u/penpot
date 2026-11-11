@@ -73,10 +73,10 @@
              (into #{} (map :id)))]
 
     (jobs/heartbeat cfg)
-    (doseq [id unused-media]
+    (doseq [media-id unused-media]
       (l/trc :obj "media-object"
              :file-id (str id)
-             :id (str id)))
+             :id (str media-id)))
 
     ;; A trimmed file is a destructive action that no RPC reports: emit
     ;; it so the audit trail records it. The team id travels in props so
