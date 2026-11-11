@@ -59,6 +59,7 @@
    [frontend-tests.errors-test]
    [frontend-tests.fonts-test]
    [frontend-tests.helpers-shapes-test]
+   [frontend-tests.helpers.async-test]
    [frontend-tests.logic.bool-move-test]
    [frontend-tests.logic.comp-remove-swap-slots-test]
    [frontend-tests.logic.comp-watcher-test]
@@ -263,6 +264,7 @@
    'frontend-tests.errors-test
    'frontend-tests.fonts-test
    'frontend-tests.helpers-shapes-test
+   'frontend-tests.helpers.async-test
    'frontend-tests.logic.bool-move-test
    'frontend-tests.logic.comp-remove-swap-slots-test
    'frontend-tests.logic.comp-watcher-test
