@@ -797,9 +797,13 @@
   "Strip the internal keys of a file map before it leaves the backend in a
   response. The file data storage pointer is bookkeeping for the write path:
   a `file-data` object is authentication-only, so a leaked id would let any
-  logged-in profile fetch the blob from `/assets/by-id`."
+  logged-in profile fetch the blob from `/assets/by-id`. The metadata key of
+  the old pointer is stripped too: a row the migration does not backfill keeps
+  it, and the metadata schema is open, so it would travel in the response."
   [file]
-  (dissoc file :storage-object-id))
+  (-> file
+      (dissoc :storage-object-id)
+      (d/update-when :metadata #(dissoc % :storage-ref-id))))
 
 (defn- file->file-data-params
   [{:keys [id] :as file}]

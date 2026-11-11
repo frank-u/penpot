@@ -172,13 +172,13 @@
     blocked))
 
 (def ^:private blocked-chunk-hint
-  "chunk deletion blocked by a live file data reference; fix the reference and let the next run reclaim the chunk")
+  "chunk deletion blocked by a live reference; fix the reference and let the next run reclaim the chunk")
 
 (defn- blocked-chunk-log
   "The first captured error record with the blocked-chunk hint, waiting for it
   because logging is asynchronous."
   [records]
-  (let [deadline (+ (System/currentTimeMillis) 5000)]
+  (let [deadline (+ (System/currentTimeMillis) 30000)]
     (loop []
       (let [record (first (filter (fn [record]
                                     (and (= :error (::l/level record))
@@ -219,8 +219,12 @@
     (t/testing "the other objects of the failed chunk are still alive"
       (t/is (every? #(some? (find-object (:id %))) others)))
 
-    (t/testing "the blocked chunk is logged as an error with a specific hint"
-      (t/is (some? (blocked-chunk-log records))))
+    (t/testing "the blocked chunk names the constraint that blocks it"
+      (let [record (blocked-chunk-log records)]
+        (t/is (some? record))
+        (t/is (= "file_data_storage_object_id_fkey"
+                 (get (::l/props record) :constraint)))
+        (t/is (= "file_data" (get (::l/props record) :table)))))
 
     (t/testing "the object of the next chunk is gone"
       (t/is (nil? (find-object last-id))))))

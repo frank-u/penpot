@@ -969,13 +969,22 @@
     (t/is (uuid? (:storage-object-id (th/db-get :file-data {:file-id (:id file)
                                                             :id (:id file)}))))
 
+    ;; A row the migration does not backfill keeps the old pointer in the
+    ;; metadata. The metadata schema is open, so it would travel in the
+    ;; response unless `file->response` strips it.
+    (th/db-update! :file-data
+                   {:metadata (db/json {"storage-ref-id" (str (uuid/next))})}
+                   {:file-id (:id file) :id (:id file)})
+
     (let [out (th/command! {::th/type :get-file
                             ::rpc/profile-id (:id profile)
                             :id (:id file)})]
       (t/is (nil? (:error out)))
       (t/is (= (:id file) (-> out :result :id)))
       (t/testing "the internal storage object id never reaches the client"
-        (t/is (not (contains? (:result out) :storage-object-id)))))))
+        (t/is (not (contains? (:result out) :storage-object-id))))
+      (t/testing "a residual metadata pointer does not reach the client"
+        (t/is (not (contains? (:metadata (:result out)) :storage-ref-id)))))))
 
 (t/deftest permissions-checks-link-to-library-1
   (let [profile1 (th/create-profile* 1)

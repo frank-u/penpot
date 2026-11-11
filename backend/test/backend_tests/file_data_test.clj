@@ -9,6 +9,7 @@
    [app.binfile.common :as bfc]
    [app.common.time :as ct]
    [app.common.uuid :as uuid]
+   [app.config :as cf]
    [app.db :as db]
    [app.features.fdata :as fdata]
    [app.storage :as sto]
@@ -284,3 +285,39 @@
 
     (t/testing "the id in the params is ignored"
       (t/is (nil? (th/db-get :file {:id other}))))))
+
+(t/deftest update-file!-touches-the-previous-object-on-a-storage-write
+  ;; With `:file-data-backend` = "storage", every ordinary save replaces the
+  ;; object of the row: the previous one must be touched so the storage GC can
+  ;; reclaim it. The storage -> db and db -> storage directions are covered
+  ;; above; this pins the configuration where storage is the default.
+  (with-redefs [cf/get (th/config-get-mock {:file-data-backend "storage"})]
+    (let [profile  (th/create-profile* 1)
+          file     (th/create-file* 1 {:profile-id (:id profile)
+                                       :project-id (:default-project-id profile)})
+          previous (:storage-object-id (th/db-get :file-data
+                                                  {:file-id (:id file) :id (:id file)}))]
+
+      (t/is (uuid? previous))
+
+      ;; A new object is born touched; clear the mark so the assertion below
+      ;; proves the save is what touches it.
+      (th/db-update! :storage-object {:touched-at nil} {:id previous})
+      (t/is (nil? (:touched-at (find-object previous))))
+
+      (db/tx-run! th/*system*
+                  (fn [cfg]
+                    (let [file (bfc/get-file cfg (:id file)
+                                             :migrate? false
+                                             :lock-for-share? true)]
+                      (bfc/update-file! cfg file :modified-at (ct/now)))))
+
+      (let [row     (th/db-get :file-data {:file-id (:id file) :id (:id file)})
+            current (:storage-object-id row)]
+
+        (t/testing "the row points at a new object"
+          (t/is (uuid? current))
+          (t/is (not= previous current)))
+
+        (t/testing "the previous object is touched for the storage GC"
+          (t/is (some? (:touched-at (find-object previous)))))))))
